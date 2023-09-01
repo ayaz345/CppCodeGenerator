@@ -43,19 +43,15 @@ def main(argv=sys.argv):
         sys.exit(0)
 
     filePath = argv[1]
-    f = open(filePath)
-    interfaceContents = f.readlines()
-    f.close()
-
+    with open(filePath) as f:
+        interfaceContents = f.readlines()
     interfaceContents = removeSignalsFromInterface(interfaceContents)
 
     currentScriptPath = os.path.realpath(__file__)
     tempFilePath = os.path.join(os.path.dirname(currentScriptPath), "temporaryFile.txt")
 
-    f = open(tempFilePath, "w")
-    f.writelines(interfaceContents)
-    f.close()
-
+    with open(tempFilePath, "w") as f:
+        f.writelines(interfaceContents)
     sys.argv[1] = tempFilePath
 
     # Add the directory of this script to the path so we can import gmock_class.
