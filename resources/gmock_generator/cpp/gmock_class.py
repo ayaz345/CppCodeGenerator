@@ -57,10 +57,7 @@ def _RenderType(ast_type):
     (which is not handled correctly).
   """
     has_multiarg_error = False
-    # Add modifiers like 'const'.
-    modifiers = ''
-    if ast_type.modifiers:
-        modifiers = ' '.join(ast_type.modifiers) + ' '
+    modifiers = ' '.join(ast_type.modifiers) + ' ' if ast_type.modifiers else ''
     return_type = modifiers + ast_type.name
     if ast_type.templated_types:
         # Collect template args.
@@ -140,8 +137,12 @@ def _GenerateMethods(output_lines, source, class_node):
                 args = re.sub('  +', ' ', args_strings.replace('\n', ' '))
 
             # Create the mock method definition.
-            output_lines.extend(['%s%s(%s,' % (indent, mock_method_macro, node.name),
-                                 '%s%s(%s));' % (indent * 3, return_type, args)])
+            output_lines.extend(
+                [
+                    f'{indent}{mock_method_macro}({node.name},',
+                    f'{indent * 3}{return_type}({args}));',
+                ]
+            )
 
 
 def _GenerateMocks(filename, source, ast_list, desired_class_names):
@@ -168,15 +169,17 @@ def _GenerateMocks(filename, source, ast_list, desired_class_names):
                 # template<typename T, int N>).
                 template_arg_count = len(class_node.templated_types.keys())
                 template_args = ['T%d' % n for n in range(template_arg_count)]
-                template_decls = ['typename ' + arg for arg in template_args]
+                template_decls = [f'typename {arg}' for arg in template_args]
                 lines.append('template <' + ', '.join(template_decls) + '>')
                 parent_name += '<' + ', '.join(template_args) + '>'
 
-            # Add the class prolog.
-            lines.append('class Mock%s : public %s {'  # }
-                         % (class_name, parent_name))
-            lines.append('%spublic:' % (' ' * (_INDENT // 2)))
-
+            lines.extend(
+                (
+                    'class Mock%s : public %s {'  # }
+                    % (class_name, parent_name),
+                    f"{' ' * (_INDENT // 2)}public:",
+                )
+            )
             # Add all the methods.
             _GenerateMethods(lines, source, class_node)
 
@@ -186,19 +189,19 @@ def _GenerateMocks(filename, source, ast_list, desired_class_names):
                 if len(lines) == 2:
                     del lines[-1]
 
-                # Only close the class if there really is a class.
-                lines.append('};')
-                lines.append('')  # Add an extra newline.
-
+                lines.extend(('};', ''))
             # Close the namespace.
             if class_node.namespace:
-                for i in range(len(class_node.namespace) - 1, -1, -1):
-                    lines.append('}  // namespace %s' % class_node.namespace[i])
+                lines.extend(
+                    '}  // namespace %s' % class_node.namespace[i]
+                    for i in range(len(class_node.namespace) - 1, -1, -1)
+                )
                 lines.append('')  # Add an extra newline.
 
     if desired_class_names:
-        missing_class_name_list = list(desired_class_names - processed_class_names)
-        if missing_class_name_list:
+        if missing_class_name_list := list(
+            desired_class_names - processed_class_names
+        ):
             missing_class_name_list.sort()
             sys.stderr.write('Class(es) not found in %s: %s\n' %
                              (filename, ', '.join(missing_class_name_list)))
@@ -224,9 +227,7 @@ def main(argv=sys.argv):
         sys.stderr.write('Unable to use indent of %s\n' % os.environ.get('INDENT'))
 
     filename = argv[1]
-    desired_class_names = None  # None means all classes in the source file.
-    if len(argv) >= 3:
-        desired_class_names = set(argv[2:])
+    desired_class_names = set(argv[2:]) if len(argv) >= 3 else None
     source = utils.ReadFile(filename)
     if source is None:
         return 1
